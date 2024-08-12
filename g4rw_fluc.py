@@ -14,6 +14,22 @@ titles = {
 }
 
 
+class DataHolder:
+  def __init__(self):
+    self.xsecs = {
+      'abs':[],
+      'cex':[],
+      'other':[]
+    }
+    self.fakes = {
+      'abs':[],
+      'cex':[],
+      'other':[]
+    }
+
+    self.ranges = None
+    self.parameters = []
+
 def open_list(i):
   with open(i, 'r') as f:
     lines = f.readlines()
@@ -234,16 +250,17 @@ def plot_xsecs(xsecs):
 
 
 def get_all_xsecs(args, lines):
-  xsecs = {
-    'abs':[],
-    'cex':[],
-    'other':[]
-  }
-  fakes = {
-    'abs':[],
-    'cex':[],
-    'other':[]
-  }
+  the_holder = DataHolder()
+  #xsecs = {
+  #  'abs':[],
+  #  'cex':[],
+  #  'other':[]
+  #}
+  #fakes = {
+  #  'abs':[],
+  #  'cex':[],
+  #  'other':[]
+  #}
 
   a = 0
   for l in lines:
@@ -251,18 +268,21 @@ def get_all_xsecs(args, lines):
     xs, ranges, fs = get_xsecs(args, l)
     if xs is None: continue
     for n, x in xs.items():
-      xsecs[n].append(x)
+      #xsecs[n].append(x)
+      the_holder.xsecs[n].append(x)
     for n, x in fs.items():
-      fakes[n].append(x)
+      #fakes[n].append(x)
+      the_holder.fakes[n].append(x)
     a += 1
-  for n, x in xsecs.items():
-    xsecs[n] = np.array(x)
-  for n, x in fakes.items():
-    fakes[n] = np.array(x)
+  for n, x in the_holder.xsecs.items():
+    the_holder.xsecs[n] = np.array(x)
+  for n, x in the_holder.fakes.items():
+    the_holder.fakes[n] = np.array(x)
 
-  ranges = get_ranges(args, lines[0])
+  the_holder.ranges = get_ranges(args, lines[0])
 
-  return xsecs, ranges, fakes
+  #return xsecs, ranges, fakes
+  return the_holder
 
 def get_chi2(args, f):
   fIn = RT.TFile.Open(f)
@@ -368,7 +388,11 @@ def test_files(args):
 
 def process(args):
   lines = open_list(args.i)
-  xsecs, ranges, fakes = get_all_xsecs(args, lines)
+  #xsecs, ranges, fakes = get_all_xsecs(args, lines)
+  results = get_all_xsecs(args, lines)
+  xsecs = results.xsecs
+  ranges = results.ranges
+  fakes = results.fakes
   means, cov = plot_xsecs(xsecs)
 
   g4s = get_g4_xsecs(args)
