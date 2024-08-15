@@ -83,8 +83,12 @@ def get_xsecs(args, f):
     name = 'Tot' if args.ints else 'XSec'
     h = fIn.Get(f'FakeDataXSecs/FakeData{t}Fake{name}')
     fakes[n] = np.array([h.GetBinContent(i+1) for i in range(h.GetNbinsX())]) if not args.nofake else None 
+
+  h = fIn.Get('postFitParsNormal')
+  pars = [h.GetBinContent(i) for i in range(1, h.GetNbinsX()+1)]
+
   fIn.Close()
-  return xsecs, ranges, fakes
+  return xsecs, ranges, fakes, pars
 
 def get_g4_xsec(fG4, name):
   #scales = np.array(scales)
@@ -251,28 +255,17 @@ def plot_xsecs(xsecs):
 
 def get_all_xsecs(args, lines):
   the_holder = DataHolder()
-  #xsecs = {
-  #  'abs':[],
-  #  'cex':[],
-  #  'other':[]
-  #}
-  #fakes = {
-  #  'abs':[],
-  #  'cex':[],
-  #  'other':[]
-  #}
 
   a = 0
   for l in lines:
     if not a % 100: print(f'{a}/{len(lines)}', end='\r')
-    xs, ranges, fs = get_xsecs(args, l)
+    xs, ranges, fs, pars = get_xsecs(args, l)
     if xs is None: continue
     for n, x in xs.items():
-      #xsecs[n].append(x)
       the_holder.xsecs[n].append(x)
     for n, x in fs.items():
-      #fakes[n].append(x)
       the_holder.fakes[n].append(x)
+    the_holder.parameters.append(pars)
     a += 1
   for n, x in the_holder.xsecs.items():
     the_holder.xsecs[n] = np.array(x)
@@ -281,7 +274,6 @@ def get_all_xsecs(args, lines):
 
   the_holder.ranges = get_ranges(args, lines[0])
 
-  #return xsecs, ranges, fakes
   return the_holder
 
 def get_chi2(args, f):
@@ -386,6 +378,15 @@ def test_files(args):
   print()
   with open(args.i, 'w') as f: f.writelines(good_files)
 
+def plot_pars(pars):
+  nbins = pars.shape[1]
+  hPars2D = RT.TH2D('hPars2D', ';Parameter Number;Values', nbins, 0, nbins, 500, 0, 5)
+  for l in pars:
+    for i in range(len(l)):
+      hPars2D.Fill(i+.5, l[i])
+  hPars2D.Write()
+
+
 def process(args):
   lines = open_list(args.i)
   #xsecs, ranges, fakes = get_all_xsecs(args, lines)
@@ -394,6 +395,7 @@ def process(args):
   ranges = results.ranges
   fakes = results.fakes
   means, cov = plot_xsecs(xsecs)
+  results.parameters = np.array(results.parameters)
 
   g4s = get_g4_xsecs(args)
   if args.results != None:
@@ -415,6 +417,7 @@ def process(args):
   plot_xsecs_root(means, cov, xsecs, fakes, fOut, ranges, args)
   if args.results != None:
     plot_results(hs, g4s, cov)
+  plot_pars(results.parameters)
   fOut.Close()
 
 def fit_func(scales, h_vals, g_vals, cov):
@@ -869,6 +872,56 @@ def comp_errs(args):
     base += 3
       
 
+def comp_pulls(args):
+  filenames = args.i.split(',')
+
+  nfiles = len(filenames)
+  nxsecs = 9
+  means = np.zeros((nxsecs, nfiles))
+  errs = np.zeros((nxsecs, nfiles))
+
+  j = 0
+  for n in filenames:
+    #print(n)
+    f = RT.TFile.Open(n)
+    #print(f.Get('h0').GetMean(), f.Get('h0').GetStdDev())
+    for i in range(nxsecs):
+      means[i,j] = f.Get(f'h{i}').GetMean()
+      errs[i,j] = f.Get(f'h{i}').GetStdDev()
+    f.Close()
+    j += 1
+
+  titles = [
+    'Absorption (500-600) MeV',
+    'Absorption (600-700) MeV',
+    'Absorption (700-800) MeV',
+    'Ch. Exch. (500-600) MeV',
+    'Ch. Exch. (600-700) MeV',
+    'Ch. Exch. (700-800) MeV',
+    'Other (500-600) MeV',
+    'Other (600-700) MeV',
+    'Other (700-800) MeV',
+  ]
+
+  from matplotlib.ticker import MaxNLocator
+  if args.save is not None:
+    plt.ion()
+  for i in range(nxsecs):
+    ax = plt.figure().gca()
+    ax.xaxis.set_major_locator(MaxNLocator(integer=True))
+    plt.errorbar(1 + np.arange(nfiles), means[i], errs[i], label=titles[i])
+    plt.plot(1 + np.arange(nfiles), np.zeros(nfiles))
+    plt.ylim(-1,1)
+    #plt.xticks(['Base', *[f'Iter. {n}' for n in range(nfiles)]])
+    plt.xlabel('Fit Iterations')
+    plt.ylabel('r')
+    plt.legend()
+    if args.save is not None:
+      plt.savefig(f'r_iters_{args.save}_xsec_{i}.png')
+      plt.savefig(f'r_iters_{args.save}_xsec_{i}.pdf')
+      plt.close()
+    else:
+      plt.show()
 
 
 if __name__ == '__main__':
@@ -877,6 +930,10 @@ if __name__ == '__main__':
   parser.add_argument('-o', default='g4rw_fluc_out.root')
   parser.add_argument('--nocheck', action='store_true', help='Prevent the good-hesse check')
   parser.add_argument('--routine', type=str, default='process',
+                      choices=['process', 'compare', 'errors', 'chi2',
+   'results', 'test', 'variation', 'draw_errs',
+   'comp_errs', 'comp_pulls',
+  ],
                       help='Options: process, compare, errors, chi2')
   parser.add_argument('--g4', type=str, default='/exp/dune/data/users/calcuttj/old_data2/PiAnalysis_G4Prediction/thresh_abscex_xsecs.root')
   parser.add_argument('--scales', type=float, nargs=3, default=[1., 1., 1.])
@@ -895,43 +952,66 @@ if __name__ == '__main__':
   #                    help='Use with errors routine')
   parser.add_argument('--ints', help='Use with prcocess routine', action='store_true')
   parser.add_argument('--ndf', type=int, default=18)
+  parser.add_argument('--save', default=None, type=str)
   args = parser.parse_args()
 
-  if args.routine =='process':
+  
+  routines = {'process':process,
+              'compare':compare,
+              'errors':errors,
+              'chi2':process_chi2,
+              'results':process_results,
+              'test':test_files,
+              #'variation':variation,
+              'draw_errs':draw_errs,
+              'comp_errs':comp_errs,
+              'comp_pulls':comp_pulls,
+  }
+
+  if args.routine in ['process', 'compare', 'errors', 'chi2']:
     from scipy import stats
     from scipy.optimize import minimize
     from scipy.stats import chi2 as statschi2
     from scipy.optimize import minimize
     import yaml
-    process(args)
-  elif args.routine == 'compare':
-    from scipy import stats
-    from scipy.optimize import minimize
-    from scipy.stats import chi2 as statschi2
-    from scipy.optimize import minimize
-    import yaml
-    compare(args)
-  elif args.routine == 'errors':
-    from scipy import stats
-    from scipy.optimize import minimize
-    from scipy.stats import chi2 as statschi2
-    from scipy.optimize import minimize
-    import yaml
-    errors(args) 
-  elif args.routine == 'chi2':
-    from scipy import stats
-    from scipy.optimize import minimize
-    from scipy.stats import chi2 as statschi2
-    from scipy.optimize import minimize
-    import yaml
-    process_chi2(args)
-  elif args.routine == 'results':
-    process_results(args)
-  elif args.routine == 'test':
-    test_files(args)
-  elif args.routine == 'variation':
-    variation(args)
-  elif args.routine == 'draw_errs':
-    draw_errs(args)
-  elif args.routine == 'comp_errs':
-    comp_errs(args)
+  routines[args.routine](args)
+  #if args.routine =='process':
+  #  from scipy import stats
+  #  from scipy.optimize import minimize
+  #  from scipy.stats import chi2 as statschi2
+  #  from scipy.optimize import minimize
+  #  import yaml
+  #  process(args)
+  #elif args.routine == 'compare':
+  #  from scipy import stats
+  #  from scipy.optimize import minimize
+  #  from scipy.stats import chi2 as statschi2
+  #  from scipy.optimize import minimize
+  #  import yaml
+  #  compare(args)
+  #elif args.routine == 'errors':
+  #  from scipy import stats
+  #  from scipy.optimize import minimize
+  #  from scipy.stats import chi2 as statschi2
+  #  from scipy.optimize import minimize
+  #  import yaml
+  #  errors(args) 
+  #elif args.routine == 'chi2':
+  #  from scipy import stats
+  #  from scipy.optimize import minimize
+  #  from scipy.stats import chi2 as statschi2
+  #  from scipy.optimize import minimize
+  #  import yaml
+  #  process_chi2(args)
+  #elif args.routine == 'results':
+  #  process_results(args)
+  #elif args.routine == 'test':
+  #  test_files(args)
+  #elif args.routine == 'variation':
+  #  variation(args)
+  #elif args.routine == 'draw_errs':
+  #  draw_errs(args)
+  #elif args.routine == 'comp_errs':
+  #  comp_errs(args)
+  #elif args.routine == 'comp_pulls':
+  #  comp_pulls(args)
