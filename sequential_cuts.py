@@ -8,6 +8,8 @@ def draw_eff_pur(eff, purity, labels):
   plt.ylim(0., 1.2)
   pur_line = ax.plot(purity, label='Purity')
   eff_line = ax.plot(eff, label='Efficiency')
+  pur_eff = eff*purity
+  pe_line = ax.plot(pur_eff, label='Pur. x Eff.')
   ax.set_xticks(np.arange(len(labels)), labels=labels)
   ax.legend()
   plt.setp(ax.get_xticklabels(), rotation=45, ha="right",
