@@ -924,6 +924,20 @@ def comp_pulls(args):
       plt.show()
 
 
+def extra_unc(args):
+  f = RT.TFile.Open(args.i) 
+  xsecs = []
+  for name in ['abs', 'cex', 'other']:
+    g = f.Get(f'{name}_xsec')
+    for i in range(g.GetN()): xsecs.append(g.GetY()[i])
+  n = len(xsecs)
+  cov = RT.TH2D('xsec_cov', '', n, 0, n, n, 0, n)
+  for i in range(n): cov.SetBinContent(i+1, i+1, (.05*xsecs[i])**2)
+
+  fout = RT.TFile(args.o, 'recreate')
+  cov.Write()
+  fout.Close()
+
 if __name__ == '__main__':
   parser = ap()
   parser.add_argument('-i', required=True)
@@ -932,7 +946,7 @@ if __name__ == '__main__':
   parser.add_argument('--routine', type=str, default='process',
                       choices=['process', 'compare', 'errors', 'chi2',
    'results', 'test', 'variation', 'draw_errs',
-   'comp_errs', 'comp_pulls',
+   'comp_errs', 'comp_pulls', 'extra_unc',
   ],
                       help='Options: process, compare, errors, chi2')
   parser.add_argument('--g4', type=str, default='/exp/dune/data/users/calcuttj/old_data2/PiAnalysis_G4Prediction/thresh_abscex_xsecs.root')
@@ -966,6 +980,7 @@ if __name__ == '__main__':
               'draw_errs':draw_errs,
               'comp_errs':comp_errs,
               'comp_pulls':comp_pulls,
+              'extra_unc':extra_unc,
   }
 
   if args.routine in ['process', 'compare', 'errors', 'chi2']:
