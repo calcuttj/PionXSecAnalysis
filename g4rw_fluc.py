@@ -1,4 +1,10 @@
 import ROOT as RT
+from scipy import stats
+from scipy.optimize import minimize
+from scipy.stats import chi2 as statschi2
+from scipy.optimize import minimize
+import yaml
+
 RT.gROOT.SetBatch()
 import sys
 from argparse import ArgumentParser as ap
@@ -923,6 +929,144 @@ def comp_pulls(args):
     else:
       plt.show()
 
+dirnames = {'past':'PastFitXSecs', 'post':'PostFitXSec', 'fake':'FakeDataXSecs'}
+preambles = {'past':'PostFit', 'post':'PostFit', 'fake':'FakeData'}
+
+def get_xsec(fname, nxsecs=9, fit_type='post'):
+  xsec = np.zeros(nxsecs)
+  f = RT.TFile.Open(fname)
+  ix = 0
+  dirname = dirnames[fit_type]
+  preamble = preambles[fit_type]
+  extra = ''
+  if fit_type == 'fake': extra = 'Fake'
+  for n in 'Abs', 'Cex', 'OtherInel':
+    #name = f'PastFitXSecs/PostFit{n}XSec'if past_fit else f'PostFitXSec/PostFit{n}XSec'
+    name = f'{dirname}/{preamble}{n}{extra}XSec'
+    x = f.Get(name)
+    for i in range(x.GetNbinsX()):
+      xsec[ix] = x.GetBinContent(i+1)
+      ix += 1
+  f.Close()
+  return xsec
+
+def draw_tune_chi2(args):
+  #Reuse fake oops
+  chi2_vals = [np.load(p) for p in args.fake_vals]
+
+  bins = np.arange(0, 100, 1) - .5
+  for i, c in enumerate(chi2_vals):
+    plt.hist(c, density=True, histtype='step', label=f'Iter {i+1}')
+  plt.legend()
+  plt.ylabel('Fraction of Fits [arb. units]')
+  plt.xlabel(r'$\chi^2$ to Previous')
+  plt.savefig(args.o + '_chi2_to_past.png')
+  plt.savefig(args.o + '_chi2_to_past.pdf')
+  #plt.plot(statschi2.pdf(bins+.5, args.ndf), label=f'NDF={args.ndf}',
+  #         linestyle='--', color='orange')
+  plt.show()
+
+
+def draw_tune_diffs(args):
+  fake_vals = [np.load(p) for p in args.fake_vals]
+  post_vals = [np.load(p) for p in args.post_vals]
+  past_vals = [np.load(p) for p in args.past_vals]
+
+  diff_to_fakes = [(pv - fv)/fv for pv,fv in zip(fake_vals, post_vals)]
+  diff_to_pasts = [(pv - fv)/fv for pv,fv in zip(past_vals, post_vals)]
+
+  aves_to_fakes = [np.mean(d, axis=0) for d in diff_to_fakes]
+  aves_to_pasts = [np.mean(d, axis=0) for d in diff_to_pasts]
+
+  stds_to_fakes = [np.std(d, axis=0) for d in diff_to_fakes]
+  stds_to_pasts = [np.std(d, axis=0) for d in diff_to_pasts]
+
+  for i, (ave,std) in enumerate(zip(aves_to_fakes, stds_to_fakes)):
+    plt.errorbar(np.arange(len(ave)), ave, std, label=f'Iter {i+1}')
+  plt.plot(np.arange(len(ave)), np.zeros(len(ave)))
+  plt.ylim(-.25, .25)
+  plt.ylabel(r'$(\sigma_{BF} - \sigma_{True})/\sigma_{True}$')
+  plt.xlabel('XSec Bin')
+  plt.legend()
+  plt.savefig(f'{args.o}_to_true.png')
+  plt.savefig(f'{args.o}_to_true.pdf')
+  plt.show()
+    
+  for i, (ave,std) in enumerate(zip(aves_to_pasts, stds_to_pasts)):
+    plt.errorbar(np.arange(len(ave)), ave, std, label=f'Iter {i+1}')
+  plt.plot(np.arange(len(ave)), np.zeros(len(ave)))
+  plt.ylim(-.25, .25)
+  plt.ylabel(r'$(\sigma_{i} - \sigma_{(i-1)})/\sigma_{(i-1)}$')
+  plt.xlabel('XSec Bin')
+  plt.legend()
+  plt.savefig(f'{args.o}_to_past.png')
+  plt.savefig(f'{args.o}_to_past.pdf')
+  plt.show()
+
+
+def tune_chi2(args):
+  with open(args.i, 'r') as f:
+    files = [i.strip() for i in f.readlines()]
+
+  nxsecs = args.ndf #9
+  xsecs0 = np.zeros((len(files), nxsecs))
+  xsecs1 = np.zeros((len(files), nxsecs))
+  fake_xsecs = np.zeros((len(files), nxsecs))
+  for i,  f in enumerate(files):
+    if not i%10: print(i, end='\r')
+
+    xsec1 = get_xsec(f, nxsecs=nxsecs)
+    xsecf = get_xsec(f, nxsecs=nxsecs, fit_type='fake')
+    #print(xsec0, xsec1)
+    if not args.nopast:
+      xsec0 = get_xsec(f, nxsecs=nxsecs, fit_type='past')
+      xsecs0[i, :] = xsec0
+    xsecs1[i, :] = xsec1
+    fake_xsecs[i, :] = xsecf
+
+    #if i > 10: break
+  print()
+
+  if args.cov is not None:
+    f = RT.TFile.Open(args.cov)
+    hcov = f.Get('xsec_cov')
+    cov = np.zeros((nxsecs, nxsecs))
+    for i in range(nxsecs):
+      for j in range(nxsecs):
+        cov[i,j] = hcov.GetBinContent(i+1,j+1)
+    f.Close()
+  else:
+    cov = np.cov(xsecs1.T)
+  print(xsecs1[np.where(np.all(xsecs1 != 0, axis=1))].T)
+  print(cov)
+  chi2s = []
+  chi2_trues = []
+  chi2_true_pasts = []
+  diffs = []
+  for i in range(len(xsecs0)):
+    diff = xsecs0[i] - xsecs1[i]
+    diffs.append(diff)
+    #print(diff)
+    chi2 = diff.dot(np.linalg.inv(cov).dot(diff))
+    chi2s.append(chi2)
+
+    diff = fake_xsecs[i] - xsecs1[i]
+    chi2_true = diff.dot(np.linalg.inv(cov).dot(diff))
+    chi2_trues.append(chi2_true)
+    #print(chi2)
+    #print(diff)
+
+    if not args.nopast:
+      diff = fake_xsecs[i] - xsecs0[i]
+      chi2_true_past = diff.dot(np.linalg.inv(cov).dot(diff))
+      chi2_true_pasts.append(chi2_true_past)
+  np.save('chi2_' + args.o, np.array(chi2s))
+  np.save('chi2_true_' + args.o, np.array(chi2_trues))
+  np.save('chi2_true_past_' + args.o, np.array(chi2_true_pasts))
+  np.save('diffs_' + args.o, np.array(diffs))
+  np.save('past_' + args.o, np.array(xsecs0))
+  np.save('post_' + args.o, np.array(xsecs1))
+  np.save('fake_' + args.o, np.array(fake_xsecs))
 
 def extra_unc(args):
   f = RT.TFile.Open(args.i) 
@@ -943,10 +1087,10 @@ if __name__ == '__main__':
   parser.add_argument('-i', required=True)
   parser.add_argument('-o', default='g4rw_fluc_out.root')
   parser.add_argument('--nocheck', action='store_true', help='Prevent the good-hesse check')
-  parser.add_argument('--routine', type=str, default='process',
+  parser.add_argument('routine', type=str, default='process',
                       choices=['process', 'compare', 'errors', 'chi2',
    'results', 'test', 'variation', 'draw_errs',
-   'comp_errs', 'comp_pulls', 'extra_unc',
+   'comp_errs', 'comp_pulls', 'extra_unc', 'tune_chi2', 'draw_tune_chi2', 'draw_tune_diffs',
   ],
                       help='Options: process, compare, errors, chi2')
   parser.add_argument('--g4', type=str, default='/exp/dune/data/users/calcuttj/old_data2/PiAnalysis_G4Prediction/thresh_abscex_xsecs.root')
@@ -965,8 +1109,13 @@ if __name__ == '__main__':
   #parser.add_argument('--stat_file', type=str,
   #                    help='Use with errors routine')
   parser.add_argument('--ints', help='Use with prcocess routine', action='store_true')
-  parser.add_argument('--ndf', type=int, default=18)
+  parser.add_argument('--ndf', type=int, default=9)
   parser.add_argument('--save', default=None, type=str)
+  parser.add_argument('--nopast', action='store_true')
+  parser.add_argument('--fake_vals', type=str, nargs='+')
+  parser.add_argument('--post_vals', type=str, nargs='+')
+  parser.add_argument('--past_vals', type=str, nargs='+')
+  parser.add_argument('--cov', type=str)
   args = parser.parse_args()
 
   
@@ -981,6 +1130,10 @@ if __name__ == '__main__':
               'comp_errs':comp_errs,
               'comp_pulls':comp_pulls,
               'extra_unc':extra_unc,
+              #'tune_chi2':tune_chi2,
+              'tune_chi2':tune_chi2,
+              'draw_tune_chi2':draw_tune_chi2,
+              'draw_tune_diffs':draw_tune_diffs,
   }
 
   if args.routine in ['process', 'compare', 'errors', 'chi2']:
