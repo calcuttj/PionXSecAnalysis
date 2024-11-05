@@ -18,13 +18,18 @@ def draw_eff_pur(eff, purity, labels):
 
 
 
-def run(filename):
+def run(args):
+  RT.gROOT.SetBatch()
+  filename = args.i
   f = RT.TFile.Open(filename)
   t = f.Get('pduneana/beamana')
 
   cuts = [
     'selection_ID != 6',
   ]
+  add = (' && true_beam_endZ > 30.' if args.fv else '')
+  add += (' && true_beam_endP > .6241554 && true_beam_startP < .929145' if args.ke else '')
+  cuts[0] += add
   cuts.append(cuts[-1] + ' && reco_beam_calo_endZ > 30.')
   cuts.append(cuts[-1] + ' && selection_ID != 5')
   cuts.append(cuts[-1] + ' && selection_ID != 4')
@@ -36,9 +41,10 @@ def run(filename):
   cex_cut = cuts[-1] + ' && selection_ID == 2'
   other_cut = cuts[-1] + ' && selection_ID == 3'
   
-  total_abs = t.GetEntries('new_interaction_topology == 1')
-  total_cex = t.GetEntries('new_interaction_topology == 2')
-  total_other = t.GetEntries('new_interaction_topology == 3')
+
+  total_abs = t.GetEntries('new_interaction_topology == 1' + add)
+  total_cex = t.GetEntries('new_interaction_topology == 2' + add)
+  total_other = t.GetEntries('new_interaction_topology == 3' + add)
 
   sels = [t.GetEntries()] + [t.GetEntries(c) for c in cuts]
 
@@ -101,37 +107,22 @@ def run(filename):
   plt.savefig('other_eff_pur.pdf')
   plt.savefig('other_eff_pur.png')
   plt.close()
-  #plt.show()
-  
-  #plt.ylim(0., 1.2)
-  #pur_line = ax.plot(abs_purity, label='Purity')
-  #eff_line = ax.plot(abs_eff, label='Efficiency')
-  ##eff_pur_line = ax.plot(abs_purity*abs_eff)
-  #ax.set_xticks(np.arange(len(labels)+1), labels=(labels+['Absorption']))
-  #ax.legend()
-  #plt.setp(ax.get_xticklabels(), rotation=45, ha="right",
-  #       rotation_mode="anchor")
-  #plt.show()
 
-  '''plt.ylim(0., 1.2)
-  plt.plot(abs_purity)
-  plt.plot(abs_eff)
-  plt.show()'''
+  '''delta_E = 'reco_beam_fixedinteractingEnergy - (sqrt(true_beam_endP*true_beam_endP*1.e6 + 139.57*139.57) - 139.57)'
+  t.Draw(delta_E + > 'htotal_abs', ('new_interaction_topology == 1' + add))
 
-  '''plt.ylim(0., 1.2)
-  plt.plot(cex_purity)
-  plt.plot(cex_eff)
-  plt.show()'''
-
-  '''plt.ylim(0., 1.2)
-  plt.plot(other_purity)
-  plt.plot(other_eff)
-  plt.show()'''
+  true_abs_sel_abs = np.array(
+    [total_abs] +
+    [t.GetEntries(c + ' && new_interaction_topology == 1') for c in cuts] +
+    [t.GetEntries(abs_cut + ' && new_interaction_topology == 1')]
+  )'''
 
 
 if __name__ == '__main__':
   parser = ap()
   parser.add_argument('-i', type=str, required=True)
+  parser.add_argument('--fv', action='store_true')
+  parser.add_argument('--ke', action='store_true')
   args = parser.parse_args()
 
-  run(args.i)
+  run(args)
