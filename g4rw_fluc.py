@@ -265,7 +265,10 @@ def get_all_xsecs(args, lines):
   a = 0
   for l in lines:
     if not a % 100: print(f'{a}/{len(lines)}', end='\r')
-    xs, ranges, fs, pars = get_xsecs(args, l)
+    #xs, ranges, fs, pars = get_xsecs(args, l)
+    results = get_xsecs(args, l)
+    if len(results) != 4: continue
+    xs, ranges, fs, pars = results 
     if xs is None: continue
     for n, x in xs.items():
       the_holder.xsecs[n].append(x)
@@ -1091,8 +1094,7 @@ if __name__ == '__main__':
                       choices=['process', 'compare', 'errors', 'chi2',
    'results', 'test', 'variation', 'draw_errs',
    'comp_errs', 'comp_pulls', 'extra_unc', 'tune_chi2', 'draw_tune_chi2', 'draw_tune_diffs',
-  ],
-                      help='Options: process, compare, errors, chi2')
+  ])
   parser.add_argument('--g4', type=str, default='/exp/dune/data/users/calcuttj/old_data2/PiAnalysis_G4Prediction/thresh_abscex_xsecs.root')
   parser.add_argument('--scales', type=float, nargs=3, default=[1., 1., 1.])
   parser.add_argument('--fit', action='store_true', help='Use with process routine')

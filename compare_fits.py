@@ -26,6 +26,8 @@ def get_sels(args, config, f1, fs, fOut):
   }
   dists = ['Abs', 'Cex', 'RejectedInt', 'APA2', 'MichelCut', 'FailedBeamCuts',
           'NoBeamTrack']
+  if args.no_michel:
+    dists.pop(dists.index('MichelCut'))
   results_hs = {}
 
   for d in dists:
@@ -214,6 +216,7 @@ if __name__ == '__main__':
   parser = ap()
   parser.add_argument('-c', type=str, help='yaml config file')
   parser.add_argument('-o', type=str)
+  parser.add_argument('--no_michel', action='store_true')
   parser.add_argument('--routine', type=str, default=None,
                       choices=[
                         None,
