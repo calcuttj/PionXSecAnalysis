@@ -33,7 +33,8 @@ def run(args):
   cuts.append(cuts[-1] + ' && reco_beam_calo_endZ > 30.')
   cuts.append(cuts[-1] + ' && selection_ID != 5')
   cuts.append(cuts[-1] + ' && selection_ID != 4')
-  cuts.append(cuts[-1] + ' && selection_ID != 7')
+  if not args.no_michel:
+    cuts.append(cuts[-1] + ' && selection_ID != 7')
 
   print(cuts)
 
@@ -90,6 +91,7 @@ def run(args):
   labels = [
     'All', 'Beam Track', 'FV Low End', 'Beam Consistency',
     'Within FV', 'No Michel Vertex']
+  if args.no_michel: labels.pop(-1)
 
   #fig, (ax0, ax1, ax2) = plt.subplots(nrows=3)
   draw_eff_pur(abs_eff, abs_purity, labels=(labels+['Absorption']))
@@ -122,6 +124,7 @@ if __name__ == '__main__':
   parser = ap()
   parser.add_argument('-i', type=str, required=True)
   parser.add_argument('--fv', action='store_true')
+  parser.add_argument('--no_michel', action='store_true')
   parser.add_argument('--ke', action='store_true')
   args = parser.parse_args()
 

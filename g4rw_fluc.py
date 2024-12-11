@@ -1019,13 +1019,14 @@ def tune_chi2(args):
     if not i%10: print(i, end='\r')
 
     xsec1 = get_xsec(f, nxsecs=nxsecs)
-    xsecf = get_xsec(f, nxsecs=nxsecs, fit_type='fake')
     #print(xsec0, xsec1)
     if not args.nopast:
       xsec0 = get_xsec(f, nxsecs=nxsecs, fit_type='past')
       xsecs0[i, :] = xsec0
     xsecs1[i, :] = xsec1
-    fake_xsecs[i, :] = xsecf
+    if not args.nofake:
+      xsecf = get_xsec(f, nxsecs=nxsecs, fit_type='fake')
+      fake_xsecs[i, :] = xsecf
 
     #if i > 10: break
   print()
@@ -1053,23 +1054,28 @@ def tune_chi2(args):
     chi2 = diff.dot(np.linalg.inv(cov).dot(diff))
     chi2s.append(chi2)
 
-    diff = fake_xsecs[i] - xsecs1[i]
-    chi2_true = diff.dot(np.linalg.inv(cov).dot(diff))
-    chi2_trues.append(chi2_true)
+    if not args.nofake:
+      diff = fake_xsecs[i] - xsecs1[i]
+      chi2_true = diff.dot(np.linalg.inv(cov).dot(diff))
+      chi2_trues.append(chi2_true)
     #print(chi2)
     #print(diff)
 
-    if not args.nopast:
+    if not args.nopast and not args.nofake:
       diff = fake_xsecs[i] - xsecs0[i]
       chi2_true_past = diff.dot(np.linalg.inv(cov).dot(diff))
       chi2_true_pasts.append(chi2_true_past)
   np.save('chi2_' + args.o, np.array(chi2s))
-  np.save('chi2_true_' + args.o, np.array(chi2_trues))
-  np.save('chi2_true_past_' + args.o, np.array(chi2_true_pasts))
   np.save('diffs_' + args.o, np.array(diffs))
-  np.save('past_' + args.o, np.array(xsecs0))
   np.save('post_' + args.o, np.array(xsecs1))
-  np.save('fake_' + args.o, np.array(fake_xsecs))
+
+  if not args.nopast:
+    np.save('past_' + args.o, np.array(xsecs0))
+  if not args.nofake:
+    np.save('chi2_true_' + args.o, np.array(chi2_trues))
+    np.save('fake_' + args.o, np.array(fake_xsecs))
+  if not args.nofake and not args.nopast:
+    np.save('chi2_true_past_' + args.o, np.array(chi2_true_pasts))
 
 def extra_unc(args):
   f = RT.TFile.Open(args.i) 

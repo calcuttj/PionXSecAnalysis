@@ -1,8 +1,16 @@
 import ROOT as RT
 import sys
+from argparse import ArgumentParser as ap
 
-fMC = RT.TFile.Open(sys.argv[1])
-fData = RT.TFile.Open(sys.argv[2])
+if __name__ == '__main__':
+  parser = ap()
+  parser.add_argument('-m', type=str, required=True)
+  parser.add_argument('-d', type=str, required=True)
+  parser.add_argument('--no_michel', action='store_true')
+  args = parser.parse_args()
+
+fMC = RT.TFile.Open(args.m)
+fData = RT.TFile.Open(args.d)
 
 tMC = fMC.Get('pduneana/beamana')
 tData = fData.Get('pduneana/beamana')
@@ -18,6 +26,9 @@ lines = {
   'total':f'Total & {total_mc} & {total_data} & 100 & 100 \\\\'
 }
 order = ['no_beam', 'beam_qual', 'ediv', 'michel', 'abs', 'cex', 'other', 'total']
+if args.no_michel:
+  order.pop(order.index('michel'))
+
 labels = {
   'no_beam':'No Reco. Beam Track',
   'beam_qual':'Inconsistent with Beam',
@@ -39,7 +50,10 @@ sets = {
  7:'michel',
 }
 
-for i in range(1, 8):
+if args.no_michel:
+  sets.pop(7)
+
+for i in range(1, (7 if args.no_michel else 8)):
   nmc = tMC.GetEntries(f'selection_ID == {i}')
   ndata = tData.GetEntries(f'selection_ID == {i} && ' + beam_p_cut)
   #print(i, nmc, ndata, f'{100.*nmc/total_mc:.2f}', f'{100.*ndata/total_data:.2f}')

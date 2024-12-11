@@ -1,5 +1,6 @@
 import ROOT as RT
 from argparse import ArgumentParser as ap
+RT.gROOT.SetBatch()
 
 def draw(t, var='true_beam_startP', binning='(100,0,2)', pdg=211):
   colors = [RT.kRed, RT.kBlue, RT.kGreen, RT.kMagenta]
@@ -19,7 +20,9 @@ def draw(t, var='true_beam_startP', binning='(100,0,2)', pdg=211):
 
 def make_stack(hs, name):
   s = RT.THStack(name, '')
-  for h in hs: s.Add(h)
+  for h in hs:
+    print(h)
+    s.Add(h)
   return s
 
 if __name__ == '__main__':
@@ -28,7 +31,6 @@ if __name__ == '__main__':
   parser.add_argument('-o', type=str)
 
   args = parser.parse_args()
-  RT.gROOT.SetBatch()
 
   f = RT.TFile.Open(args.i)
   t = f.Get('pduneana/beamana')
@@ -44,7 +46,7 @@ if __name__ == '__main__':
   leg_labels = ['No Track', 'Beam Cut', 'Past FV', 'Other']
   for h, l in zip(hpis, leg_labels):
     leg.AddEntry(h, l) 
-  leg.Write()
+  leg.Write('leg')
 
   hmus = draw(t, pdg=-13)
   for h in hmus: h.Write()

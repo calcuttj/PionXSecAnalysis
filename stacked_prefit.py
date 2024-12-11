@@ -148,6 +148,7 @@ if __name__ == '__main__':
       data_hists['Combined'].SetBinContent(i+1, data_hists[to_combine[i]].GetBinContent(1))
     data_hists['Combined'].Sumw2()
     data_hists['Combined'].SetMarkerColor(RT.kBlack);
+    data_hists['Combined'].SetMarkerStyle(20);
     for i in range(len(combined_errs)): data_hists['Combined'].SetBinError(i+1, combined_errs[i]*1.e-3)
   
      
