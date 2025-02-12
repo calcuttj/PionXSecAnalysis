@@ -13,14 +13,21 @@ if __name__ == '__main__':
   parser.add_argument('--no_michel', action='store_true')
   args = parser.parse_args()
   
-  #RT.gROOT.LoadMacro("~/protoDUNEStyle.C")
-  RT.gROOT.SetBatch();
-  RT.gStyle.SetOptStat(00000)
-  RT.gStyle.SetErrorX(1.e-4)
-  RT.gStyle.SetTitleAlign(33)
-  RT.gStyle.SetTitleX(.915)
-  RT.gStyle.SetTitleY(.95)
+  RT.gROOT.LoadMacro("~/protoDUNEStyle.C")
+  RT.gROOT.SetStyle("protoDUNEStyle")
   RT.gROOT.ForceStyle()
+  RT.gStyle.SetTitleX(0.5)
+  RT.gStyle.SetTitleAlign(22)
+  RT.gStyle.SetTitleY(0.87)
+  RT.gStyle.SetTitleW(0.80) # or .85
+  RT.gStyle.SetOptFit(111)
+
+  # RT.gStyle.SetOptStat(00000)
+  # RT.gStyle.SetErrorX(1.e-4)
+  # RT.gStyle.SetTitleAlign(33)
+  # RT.gStyle.SetTitleX(.915)
+  # RT.gStyle.SetTitleY(.95)
+  # RT.gROOT.ForceStyle()
   
   fIn = RT.TFile(args.i, "OPEN");
   
@@ -98,7 +105,7 @@ if __name__ == '__main__':
     'FailedBeamCuts': 'Failed Beam Cuts', 
     'BeforeFV': 'Before FV',
   }
-  leg = RT.TLegend()
+  leg = RT.TLegend(.2, .55, .8, .83)
   leg.SetLineWidth(0)
   leg.SetFillStyle(0)
   for s,n in zip(samples, sample_names):
@@ -113,14 +120,14 @@ if __name__ == '__main__':
     #combined_hists[s].GetXaxis().SetBinLabel(1, 'Failed Beam Cuts')
     #combined_hists[s].GetXaxis().SetBinLabel(2, 'No Beam Track')
     #combined_hists[s].GetXaxis().SetBinLabel(3, 'Michel Vertex Cut')
-    leg.AddEntry(combined_hists[s], n, 'l')
+    leg.AddEntry(combined_hists[s], n, 'lf')
     stacks['Combined'].Add(combined_hists[s]) 
   fOut = RT.TFile(args.o, 'recreate')
   
   xytitles = {
-    'Abs':'Absorption;Reconstructed KE [MeV];Events per bin [x10^{3}]',
-    'Cex':'Charge Exchange;Reconstructed KE [MeV];Events per bin [x10^{3}]',
-    'RejectedInt':'Other Interactions;Reconstructed KE [MeV];Events per bin [x10^{3}]',
+    'Abs':'Absorption Cand.;Reconstructed KE [MeV];Events per bin [x10^{3}]',
+    'Cex':'Charge Exchange Cand.;Reconstructed KE [MeV];Events per bin [x10^{3}]',
+    'RejectedInt':'Other Interaction Cand.;Reconstructed KE [MeV];Events per bin [x10^{3}]',
     'APA2':'Past Fiducial Volume;Reconstructed End Z [cm];Events per bin [x10^{3}]',
     'Combined':';;Events per bin [x10^{3}]',
     'MichelCut':'Michel Cut;;Events per bin [x10^{3}]',
@@ -154,26 +161,32 @@ if __name__ == '__main__':
      
   
   for n, s in stacks.items():
-    c = RT.TCanvas('c%s'%n, '')
+    cname = f'c{n}'
+    c = RT.TCanvas(cname, '')
     c.SetTicks()
     s.Draw('hist')
     #s.GetHistogram().SetTitle(xytitles[n])
     s.SetTitle(xytitles[n])
     s.GetHistogram().GetXaxis().CenterTitle()
     s.GetHistogram().GetYaxis().CenterTitle()
-    s.GetHistogram().GetYaxis().SetTitleOffset(.95)
+    # s.GetHistogram().GetYaxis().SetTitleOffset(.95)
+    the_max = s.GetHistogram().GetMaximum()
     if add_data:
       if data_hists[n].GetMaximum() > s.GetHistogram().GetMaximum():
         print(data_hists[n].GetMaximum(), s.GetHistogram().GetMaximum())
-        s.SetMaximum(1.1*data_hists[n].GetMaximum())
+        the_max = data_hists[n].GetMaximum()
+    s.SetMaximum(2*the_max)
     s.Draw('hist')
     if add_data:
       data_hists[n].Draw('same e')
       if n == 'Abs':
         leg.AddEntry(data_hists[n], 'Data', 'pe')
     if n == 'Abs':
+      leg.SetNColumns(2)
       leg.Draw('same')
     RT.gPad.RedrawAxis()
     tt.DrawLatex(0.10,0.94,"#bf{DUNE:ProtoDUNE-SP}");
     s.Write('stack_%s'%n)
     c.Write()
+    c.SaveAs(cname + '.pdf')
+    c.SaveAs(cname + '.png')
