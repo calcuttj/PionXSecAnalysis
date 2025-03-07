@@ -1,8 +1,8 @@
 import ROOT as RT
-from scipy import stats
-from scipy.optimize import minimize
-from scipy.stats import chi2 as statschi2
-from scipy.optimize import minimize
+# from scipy import stats
+# from scipy.optimize import minimize
+# from scipy.stats import chi2 as statschi2
+# from scipy.optimize import minimize
 import yaml
 
 RT.gROOT.SetBatch()
@@ -10,6 +10,15 @@ import sys
 from argparse import ArgumentParser as ap
 import matplotlib.pyplot as plt
 import numpy as np
+
+RT.gROOT.LoadMacro("~/protoDUNEStyle.C")
+RT.gROOT.SetStyle("protoDUNEStyle")
+RT.gROOT.ForceStyle()
+RT.gStyle.SetTitleX(0.5)
+RT.gStyle.SetTitleAlign(22)
+RT.gStyle.SetTitleY(0.87)
+RT.gStyle.SetTitleW(0.80) # or .85
+RT.gStyle.SetOptFit(111)
 
 tt = RT.TLatex();
 tt.SetNDC();
@@ -555,13 +564,20 @@ def set_error(hs, cov, content=False):
     a += h.GetNbinsX()
 
 def draw_error_conts(total_errs, stat_errs, syst_errs, names, colors,
-                     sce_errs=None, frac=False):
+                     sce_errs=None, frac=False, styles=None, hist_names=None):
   n_hists = len(stat_errs)
+
+  titles = {
+    'abs':'Absorption',
+    'cex':'Charge Exchange',
+    'other':'Other Interactions',
+  }
 
   for i in range(n_hists):
     c_errs = RT.TCanvas(f'c_errs_{i}{"_frac" if frac else ""}')
     c_errs.SetTicks()
 
+    vals = []
     for j in range(1, total_errs[i].GetNbinsX()+1):
       if frac:
         err = total_errs[i].GetBinError(j)/total_errs[i].GetBinContent(j)
@@ -569,38 +585,48 @@ def draw_error_conts(total_errs, stat_errs, syst_errs, names, colors,
         err = total_errs[i].GetBinError(j)
       total_errs[i].SetBinContent(j, err)
       total_errs[i].SetBinError(j, 0.)
+      vals.append(err)
+    the_max = max(vals)
     total_errs[i].SetMinimum(0.)
     total_errs[i].SetLineColor(RT.kBlack)
     total_errs[i].SetLineWidth(2)
     total_errs[i].SetMinimum(0.)
-    total_errs[i].SetTitle(';Kinetic Energy (MeV);Fractional Error Contribution')
-    total_errs[i].Draw('hist')
+    total_errs[i].SetMaximum(2.*the_max)
+    # total_errs[i].SetTitle(';Kinetic Energy (MeV);Fractional Error Contribution')
+    total_errs[i].SetTitle('\pi^{+}-Ar '  + f'{titles[hist_names[i]]};Kinetic Energy [MeV];Relative Uncertainty')
+    total_errs[i].GetXaxis().CenterTitle()
+    total_errs[i].GetYaxis().CenterTitle()
+    total_errs[i].Draw('hist ][')
 
 
-    stat_errs[i].SetLineColor(RT.kBlack)
-    stat_errs[i].SetLineStyle(2)
+    stat_errs[i].SetLineColor(RT.kBlue)
+    stat_errs[i].SetLineStyle(4)
     stat_errs[i].SetLineWidth(2)
     stat_errs[i].SetMinimum(0.)
-    stat_errs[i].Draw('hist same')
+    stat_errs[i].Draw('hist same ][')
 
     if i == 0:
-      leg = RT.TLegend()
+      leg = RT.TLegend(.2, .65, .8, .83)
       leg.SetFillStyle(0)
       leg.SetLineWidth(0)
-      leg.AddEntry(total_errs[i], 'Total', 'l')
-      leg.AddEntry(stat_errs[i], 'Stats. Only', 'l')
+      leg.AddEntry(total_errs[i], 'Total Uncertainty', 'l')
+      leg.AddEntry(stat_errs[i], 'Data Stat. Uncertainty', 'l')
 
     a = 0
-    styles = [2, 9]
+    do_old_styles = False
+    if styles is None:
+      do_old_styles = True
+      styles = [2, 9]
     for syst_err_v in syst_errs:
       syst_err_v[i].SetLineColor(colors[a % len(colors)])
       syst_err_v[i].SetLineWidth(2)
-      #if a >= len(colors):
-      #  syst_err_v[i].SetLineStyle(2)
-      istyle = int(a/len(colors))
-      if istyle > 0:
-        syst_err_v[i].SetLineStyle(styles[istyle-1])
-      syst_err_v[i].Draw('same hist')
+      if do_old_styles:
+        istyle = int(a/len(colors))
+        if istyle > 0:
+          syst_err_v[i].SetLineStyle(styles[istyle-1])
+      else:
+        syst_err_v[i].SetLineStyle(styles[a])
+      syst_err_v[i].Draw('same hist ][')
       if i == 0:
         leg.AddEntry(syst_err_v[i], names[a], 'l')
       a += 1
@@ -609,15 +635,18 @@ def draw_error_conts(total_errs, stat_errs, syst_errs, names, colors,
       #sce_errs[i].SetLineColor(colors[len(syst_err_v[i])])
       sce_errs[i].SetLineStyle(2)
       sce_errs[i].SetLineWidth(2)
-      sce_errs[i].Draw('same hist')
+      sce_errs[i].Draw('same hist ][')
       if i == 0:
         leg.AddEntry(sce_errs[i], 'SCE', 'l')
 
 
     if i == 0:
       leg.Draw()
-      leg.SetNColumns(3)
+      # leg.SetNColumns(3)
+    tt.DrawLatex(0.10,0.94,"#bf{DUNE:ProtoDUNE-SP}")
     c_errs.Write()
+    c_errs.SaveAs(f'c_errs_{i}{"_frac" if frac else ""}' + ".pdf")
+    c_errs.SaveAs(f'c_errs_{i}{"_frac" if frac else ""}' + ".png")
 
 def make_fractional(hs, errs, nodict=False):
   print('Here')
@@ -629,8 +658,10 @@ def make_fractional(hs, errs, nodict=False):
   return fracs
 
 def errors(args):
-  hs = get_results(args)
 
+
+  hs = get_results(args)
+  hist_names = [i for i in hs.keys()]
   with open(args.i, 'r') as fin:
     config = yaml.safe_load(fin)
 
@@ -745,9 +776,11 @@ def errors(args):
     fracs_sce = make_fractional(hs, sce_errs, nodict=True)
     for h in fracs_sce: h.Write()
 
-  draw_error_conts(hs, stat_errs, syst_errs, syst_labels, colors, sce_errs=sce_errs)
+  styles = config['styles'] if 'styles' in config else None
+
+  draw_error_conts(hs, stat_errs, syst_errs, syst_labels, colors, sce_errs=sce_errs, styles=styles, hist_names=hist_names)
   draw_error_conts(frac_hs, fracs_stat, syst_fracs, syst_labels, colors,
-                    sce_errs=fracs_sce, frac=True)
+                    sce_errs=fracs_sce, frac=True, styles=styles, hist_names=hist_names)
 
   fG4 = RT.TFile.Open(config['g4_file'])
   g4s = get_g4_xsecs_config(fG4)

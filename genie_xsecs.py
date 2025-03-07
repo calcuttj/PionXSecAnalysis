@@ -68,7 +68,7 @@ def draw(in_name, out_name):
     t = f.Get('tree')
 
     fout = RT.TFile(out_name, 'recreate')
-    t.Draw('ke>>hD(120, 0, 1.2)')
+    t.Draw('1.e3*ke>>hD(120, 0, 1200)')
     hD = RT.gDirectory.Get('hD')
 
     int_type = {
@@ -84,7 +84,7 @@ def draw(in_name, out_name):
     scale_factor = 10*RT.TMath.Pi() * r**2 
     for n, it in int_type.items():
         print('Doing', n)
-        t.Draw(f'ke>>h{n}(120, 0, 1.2)', f'int_type=={it}')
+        t.Draw(f'1.e3*ke>>h{n}(120, 0, 1200)', f'int_type=={it}')
         hs.append(RT.gDirectory.Get(f'h{n}'))
         hs[-1].Divide(hD)
         hs[-1].Scale(scale_factor)

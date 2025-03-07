@@ -137,3 +137,22 @@ for i in range(1, 5):
       line += f'& {n_true/n_sel:.2f} '
   print(line + '\\\\')
 
+
+print('PUBLICATION NUMBERS')
+
+#For the publication, state the efficiencies and purities
+# relative to the pre-selected events
+
+#abs through other ints
+for i in range(1, 4):
+  base_cut = 'selection_ID < 5' #this cuts out no track + tracks failing preselection
+  eff_truth = tMC.GetEntries(f'{base_cut} && new_interaction_topology == {i}')
+  eff_sel = tMC.GetEntries(f'{base_cut} && selection_ID == {i} && new_interaction_topology == {i}')
+
+  pur_truth = tMC.GetEntries(f'selection_ID == {i} && new_interaction_topology == {i}')
+  pur_sel = tMC.GetEntries(f'selection_ID == {i}')
+
+  line = f'{labels[sets[i]]}'
+  line += f' & {eff_sel/eff_truth:.2f}'
+  line += f' & {pur_truth/pur_sel:.2f}' + '\\\\'
+  print(line)

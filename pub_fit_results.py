@@ -388,9 +388,9 @@ def normal(args):
     # if (max_post > max_pre and max_post > max_data):
     postfit.SetMaximum(2.*the_max)
     postfit.SetMinimum(0.)
-    postfit.Draw("hist")
-    prefit.Draw("hist same")
-    data.Draw("same e")
+    postfit.Draw("hist ][")
+    prefit.Draw("hist same ][")
+    data.Draw("same e ][")
     # elif (max_pre > max_post and max_pre > max_data):
     #   prefit.Draw("hist")
     #   postfit.Draw("hist same")
