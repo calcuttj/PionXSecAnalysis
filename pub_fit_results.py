@@ -309,7 +309,11 @@ def normal(args):
     data.SetMarkerColor(RT.kBlack);
     #data.SetMarkerSize(.5)
     data.SetLineColor(RT.kBlack);
-    data.SetTitle(names[i] + ";" + XTitles[i] + ";Events per bin [x10^{3}]")
+    if args.notitle:
+      title = ";" + XTitles[i] + ";Events per bin [x10^{3}]"
+    else:
+      title = names[i] + ";" + XTitles[i] + ";Events per bin [x10^{3}]"
+    data.SetTitle(title)
     data.GetYaxis().SetMaxDigits(3)
     #data.SetTitleSize(.05, "XY")
     data.GetXaxis().CenterTitle()
@@ -327,7 +331,7 @@ def normal(args):
     prefit.SetFillColor(0);
     prefit.SetLineStyle(2);
     prefit.SetLineColor(RT.kBlue);
-    prefit.SetTitle(names[i] + ";" + XTitles[i] + ";Events per bin [x10^{3}]")
+    prefit.SetTitle(title)
     prefit.GetXaxis().CenterTitle()
     prefit.GetYaxis().CenterTitle()
     prefit.Scale(1.e-3)
@@ -345,7 +349,7 @@ def normal(args):
     postfit.SetFillColor(0);
     postfit.SetLineColor(RT.kRed)
     # postfit.SetLineStyle(2)
-    postfit.SetTitle(names[i] + ";" + XTitles[i] + ";Events per bin [x10^{3}]")
+    postfit.SetTitle(title)
     postfit.GetYaxis().SetMaxDigits(3)
     postfit.GetXaxis().CenterTitle()
     postfit.GetYaxis().CenterTitle()
@@ -443,6 +447,7 @@ def save(args):
   if args.no_michel: cs.pop(cs.index('cMichelCut'))
   for n in cs:
     c = f.Get(n)
+
     c.Draw()
     c.SaveAs(n + '.pdf') 
   f.Close()
@@ -466,6 +471,7 @@ if __name__ == '__main__':
                       ])
   parser.add_argument('--npars', default=0, type=int)
   parser.add_argument('--noplotstyle', action='store_true')
+  parser.add_argument('--notitle', action='store_true')
   args = parser.parse_args()
   
   routines = {

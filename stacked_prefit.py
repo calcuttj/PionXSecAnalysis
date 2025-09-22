@@ -11,6 +11,7 @@ if __name__ == '__main__':
   parser.add_argument('--no_upstream', action='store_true')
   parser.add_argument('--new_fv', action='store_true')
   parser.add_argument('--no_michel', action='store_true')
+  parser.add_argument('--notitle', action='store_true')
   args = parser.parse_args()
   
   RT.gROOT.LoadMacro("~/protoDUNEStyle.C")
@@ -64,6 +65,17 @@ if __name__ == '__main__':
     'PionPastFV':795,
     'Other':630
   }
+
+  fills = {
+    'Abs':1001,
+    'Cex':3006,
+    'OtherInel':3144,
+    'Muons':3003,
+    'UpstreamIntSingle':3004,
+    'UpstreamInt':3004,
+    'PionPastFV':3001,
+    'Other':3008
+  }
   
   sorted_hists = {
   }
@@ -84,19 +96,29 @@ if __name__ == '__main__':
     sorted_hists[h][s].append(fIn.Get('MC_Samples/%s'%n))
     #print(sorted_hists[h][s])
   
+
   for n, samps in sorted_hists.items():
     #if n in to_combine: continue
     #print(n, samps)
     for s, hists in samps.items():
       #print(s, hists)
+      summed_hist = hists[0].Clone(s+'summed')
+      summed_hist.Reset()
       for h in hists:
         #print(h)
         h.SetFillColor(colors[s])
-        h.SetFillStyle(1001)
+        h.SetFillStyle(fills[s])
+
         h.SetLineColor(colors[s])
         h.Scale(1.e-3)
         if n == 'MichelCut': h.GetXaxis().SetBinLabel(1, '')
-        stacks[n].Add(h)
+        # stacks[n].Add(h)
+        summed_hist.Add(h)
+      summed_hist.SetFillColor(colors[s])
+      summed_hist.SetFillStyle(fills[s])
+      summed_hist.SetLineColor(colors[s])
+      summed_hist.SetLineWidth(1)
+      stacks[n].Add(summed_hist)
   
   combined_hists = dict()
   combined_labels = {
@@ -111,7 +133,7 @@ if __name__ == '__main__':
   for s,n in zip(samples, sample_names):
     combined_hists[s] = RT.TH1D('combined_%s'%s, '', len(to_combine), 0, len(to_combine))
     combined_hists[s].SetFillColor(colors[s])
-    combined_hists[s].SetFillStyle(1001)
+    combined_hists[s].SetFillStyle(fills[s])
     combined_hists[s].SetLineColor(colors[s])
     for i in range(len(to_combine)):
       hists = sorted_hists[to_combine[i]][s]
@@ -135,6 +157,9 @@ if __name__ == '__main__':
     'NoBeamTrack':';;Events per bin [x10^{3}]',
     'BeforeFV':';;Events per bin [x10^{3}]',
   }
+  if args.notitle:
+    xytitles = {k:';' + ';'.join(t.split(';')[1:]) for k, t in xytitles.items()}
+    
   
   tt = RT.TLatex();
   tt.SetNDC();

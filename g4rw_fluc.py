@@ -567,12 +567,23 @@ def draw_error_conts(total_errs, stat_errs, syst_errs, names, colors,
                      sce_errs=None, frac=False, styles=None, hist_names=None):
   n_hists = len(stat_errs)
 
+
+  RT.gStyle.SetLineStyleString(10, "200, 10")
   titles = {
     'abs':'Absorption',
     'cex':'Charge Exchange',
     'other':'Other Interactions',
   }
 
+  stacks = [
+    RT.THStack('stack'+t.GetName(), 's') for t in total_errs
+  ]
+
+  do_old_styles = False
+  if styles is None:
+    print('OLD STYLE')
+    do_old_styles = True
+    styles = [2, 9]
   for i in range(n_hists):
     c_errs = RT.TCanvas(f'c_errs_{i}{"_frac" if frac else ""}')
     c_errs.SetTicks()
@@ -589,11 +600,12 @@ def draw_error_conts(total_errs, stat_errs, syst_errs, names, colors,
     the_max = max(vals)
     total_errs[i].SetMinimum(0.)
     total_errs[i].SetLineColor(RT.kBlack)
-    total_errs[i].SetLineWidth(2)
+    total_errs[i].SetLineWidth(4)
     total_errs[i].SetMinimum(0.)
-    total_errs[i].SetMaximum(2.*the_max)
+    total_errs[i].SetMaximum(1.1*the_max)
     # total_errs[i].SetTitle(';Kinetic Energy (MeV);Fractional Error Contribution')
-    total_errs[i].SetTitle('\pi^{+}-Ar '  + f'{titles[hist_names[i]]};Kinetic Energy [MeV];Relative Uncertainty')
+    this_title = '' #'\pi^{+}-Ar '  + f'{titles[hist_names[i]]}'
+    total_errs[i].SetTitle(f'{this_title};Kinetic Energy [MeV];Relative Uncertainty')
     total_errs[i].GetXaxis().CenterTitle()
     total_errs[i].GetYaxis().CenterTitle()
     total_errs[i].Draw('hist ][')
@@ -605,19 +617,31 @@ def draw_error_conts(total_errs, stat_errs, syst_errs, names, colors,
     stat_errs[i].SetMinimum(0.)
     stat_errs[i].Draw('hist same ][')
 
+    add = stat_errs[i].Clone()
+    add.SetLineWidth(1)
+    add.SetLineStyle(1)
+    add.SetLineColor(RT.kBlue)
+    add.SetFillColor(RT.kBlue)
+    add.SetFillStyle(1001)
+    stacks[i].Add(add)
+
     if i == 0:
-      leg = RT.TLegend(.2, .65, .8, .83)
+      leg = RT.TLegend(.2, .165, .8, .83)
       leg.SetFillStyle(0)
       leg.SetLineWidth(0)
       leg.AddEntry(total_errs[i], 'Total Uncertainty', 'l')
       leg.AddEntry(stat_errs[i], 'Data Stat. Uncertainty', 'l')
 
+      leg2 = RT.TLegend(.2, .65, .8, .83)
+      leg2.SetFillStyle(0)
+      leg2.SetLineWidth(0)
+      # leg.AddEntry(total_errs[i], 'Total Uncertainty', 'l')
+      leg2.AddEntry(add, 'Data Stat. Uncertainty', 'l')
+
     a = 0
-    do_old_styles = False
-    if styles is None:
-      do_old_styles = True
-      styles = [2, 9]
+
     for syst_err_v in syst_errs:
+      print(colors[a % len(colors)])
       syst_err_v[i].SetLineColor(colors[a % len(colors)])
       syst_err_v[i].SetLineWidth(2)
       if do_old_styles:
@@ -627,8 +651,17 @@ def draw_error_conts(total_errs, stat_errs, syst_errs, names, colors,
       else:
         syst_err_v[i].SetLineStyle(styles[a])
       syst_err_v[i].Draw('same hist ][')
+
+
+      add = syst_err_v[i].Clone()
+      add.SetLineColor(colors[a%len(colors)])
+      add.SetLineWidth(1)
+      stacks[i].Add(add)
+
+
       if i == 0:
         leg.AddEntry(syst_err_v[i], names[a], 'l')
+        leg2.AddEntry(add, names[a], 'l')
       a += 1
 
     if sce_errs is not None:
@@ -636,18 +669,39 @@ def draw_error_conts(total_errs, stat_errs, syst_errs, names, colors,
       sce_errs[i].SetLineStyle(2)
       sce_errs[i].SetLineWidth(2)
       sce_errs[i].Draw('same hist ][')
+
+      add = sce_errs[i].Clone()
+      # add.SetLineColor(colors[a%len(colors)])
+      add.SetLineWidth(1)
+      stacks[i].Add(add)
       if i == 0:
         leg.AddEntry(sce_errs[i], 'SCE', 'l')
+        leg2.AddEntry(add, 'SCE', 'l')
 
 
     if i == 0:
-      leg.Draw()
-      # leg.SetNColumns(3)
+      #leg.Draw()
+      leg.SetNColumns(2)
+      leg2.SetNColumns(2)
     tt.DrawLatex(0.10,0.94,"#bf{DUNE:ProtoDUNE-SP}")
+    #c_errs.SetLogy()
     c_errs.Write()
     c_errs.SaveAs(f'c_errs_{i}{"_frac" if frac else ""}' + ".pdf")
     c_errs.SaveAs(f'c_errs_{i}{"_frac" if frac else ""}' + ".png")
 
+
+
+    stacks[i].Draw('hist')
+    # This isn't right because I need to add in quad
+    # c_errs.SaveAs(f'c_errs_stack_{i}{'_frac' if frac else ''}' + '.pdf')
+
+  # fout_leg = RT.TFile('leg_out.root', 'recreate')
+  c_leg = RT.TCanvas('c_leg')
+  leg.SetNColumns(1)
+  leg.Draw()
+  c_leg.SaveAs('legend_new.pdf')
+  leg.Write('legend')
+  # fout_leg.Close()
 def make_fractional(hs, errs, nodict=False):
   print('Here')
   fracs = []
@@ -777,7 +831,7 @@ def errors(args):
     for h in fracs_sce: h.Write()
 
   styles = config['styles'] if 'styles' in config else None
-
+  print('STYLES', styles)
   draw_error_conts(hs, stat_errs, syst_errs, syst_labels, colors, sce_errs=sce_errs, styles=styles, hist_names=hist_names)
   draw_error_conts(frac_hs, fracs_stat, syst_fracs, syst_labels, colors,
                     sce_errs=fracs_sce, frac=True, styles=styles, hist_names=hist_names)

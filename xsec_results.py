@@ -3,7 +3,7 @@ from array import array
 from argparse import ArgumentParser as ap
 import sys
 from math import sqrt
-
+import numpy as np
 
 def extra_genie_xsec(reordered_xs, file):
     fOther = RT.TFile.Open(file)
@@ -68,6 +68,7 @@ if __name__ == '__main__':
   parser.add_argument('--extra_unc', type=float, help='Extra uncertainty (percent) to add to each bin uncorrelated', default=None)
   parser.add_argument('--xerr', type=float, default=None)
   parser.add_argument('-v', action='store_true')
+  parser.add_argument('--notitle', action='store_true')
 
   args = parser.parse_args()
 
@@ -262,7 +263,8 @@ if __name__ == '__main__':
       g4_xsecs[i].SetMaximum(1.5*max([g4_maxes[i], result_maxes[i]]))
 
     g4_xsecs[i].SetLineColor(RT.kRed)
-    g4_xsecs[i].SetTitle('%s;Kinetic Energy [MeV];#sigma [mb]'%titles[i])
+    title = f'{titles[i]};Kinetic Energy [MeV];#sigma [mb]' if not args.notitle else ';Kinetic Energy [MeV];#sigma [mb]'
+    g4_xsecs[i].SetTitle(title)
     g4_xsecs[i].GetXaxis().CenterTitle()
     g4_xsecs[i].GetYaxis().CenterTitle()
     g4_xsecs[i].GetXaxis().SetRangeUser(0., 999.)
@@ -271,7 +273,7 @@ if __name__ == '__main__':
 
     if args.genie:
       genie_xsecs[i].SetLineColor(RT.kBlue)
-      genie_xsecs[i].SetTitle('%s;Kinetic Energy [MeV];#sigma [mb]'%titles[i])
+      genie_xsecs[i].SetTitle(title)
       genie_xsecs[i].GetXaxis().CenterTitle()
       genie_xsecs[i].GetYaxis().CenterTitle()
       genie_xsecs[i].GetXaxis().SetRangeUser(0., 999.)
@@ -300,9 +302,10 @@ if __name__ == '__main__':
     result_xsecs[i].SetMarkerStyle(20)
     result_xsecs[i].SetMarkerColor(RT.kBlack)
     if i == 0:
-      leg = RT.TLegend(.2, .55, .8, .83)
+      leg = RT.TLegend(.25, .60, .85, .88)
       leg.SetFillStyle(0)
       leg.SetLineWidth(0)
+      leg.AddEntry(result_xsecs[i], 'Data (stat.+syst.)', 'pez')
       if args.xt:
         leg.AddEntry(g4_xsecs[i], 'Geant4 10.6 Thresholds', 'l')
       elif args.v:
@@ -322,7 +325,7 @@ if __name__ == '__main__':
           print(el)
           leg.AddEntry(ex[i], el  + ' (\chi^{2}' + f' = {extra_chi2s[j]:.2f})', 'l')
       # leg.AddEntry(result_xsecs[i], 'ProtoDUNE-SP', 'pez')
-      leg.AddEntry(result_xsecs[i], 'Data (stat.+syst.)', 'pez')
+      #leg.AddEntry(result_xsecs[i], 'Data (stat.+syst.)', 'pez')
       leg.Draw()
     tt.DrawLatex(0.10,0.94,"#bf{DUNE:ProtoDUNE-SP}");
     if args.p:
@@ -333,8 +336,10 @@ if __name__ == '__main__':
     c.SaveAs(f'{names[i]}_xsec.pdf')
     c.SaveAs(f'{names[i]}_xsec.png')
 
+  RT.gStyle.SetPalette(RT.kBlackBody)
   xsec_corr = fResults.Get('xsec_corr')
-  xsec_corr.SetTitle('Correlation Matrix;Cross Section Bin;Cross Section Bin')
+  title = ';Cross Section Bin;Cross Section Bin' if args.notitle else 'Correlation Matrix;Cross Section Bin;Cross Section Bin'
+  xsec_corr.SetTitle(title)
   # xsec_corr.SetTitle(';;')
   cCorr = RT.TCanvas('cCorr', '')
   xsec_corr.GetXaxis().CenterTitle()
@@ -405,6 +410,7 @@ if __name__ == '__main__':
       total_errs[i] += result_xsecs[1].GetEYhigh()[args.cl+i]**2
       total_errs[i] += result_xsecs[2].GetEYhigh()[args.ol+i]**2
     #total_errs = [sqrt(e) for e in total_errs]
+    print('Total xsec and errors')
     print(total_results)
     print([sqrt(i) for i in total_errs])
     
@@ -421,31 +427,113 @@ if __name__ == '__main__':
     total_cov_hist.Write("total_cov")
     
     added_errs = [sqrt(total_cov_hist.GetBinContent(i+1, i+1)) for i in range(0, len(total_results))]
+    xerr = 0 if args.xerr is None else args.xerr
     gr_total = RT.TGraphErrors(len(total_results), array('d', total_xs), array('d', total_results),
-                              array('d', [0.]*len(total_results)), array('d', added_errs))
+                              array('d', [xerr]*len(total_results)), array('d', added_errs))
     gr_total.Write('total_gr')
-    
+  
+    total_xsec_cov_mat = RT.TMatrixD(total_cov_hist.GetNbinsX(), total_cov_hist.GetNbinsX())
+    for i in range(1, total_cov_hist.GetNbinsX()+1):
+      for j in range(1, total_cov_hist.GetNbinsX()+1):
+        total_xsec_cov_mat[i-1][j-1] = total_cov_hist.GetBinContent(i, j) 
+    total_xsec_cov_mat = total_xsec_cov_mat.Invert()
+
+
     total_g4 = fG4.Get('total_inel_KE')
     total_g4.SetMinimum(0.)
+    if args.m: total_g4.SetMaximum(1.5*the_max)
     total_g4.SetLineWidth(2)
     gr_total.SetLineWidth(2)
     total_g4.SetLineColor(RT.kRed)
-    total_g4.SetTitle('Total Inelastic;Kinetic Energy [MeV];#sigma [mb]')
-    
+    total_g4.SetTitle(';Kinetic Energy [MeV];#sigma [mb]')
+
+    g4_chi2 = 0.
+    n = len(total_results)
+    for i in range(0, n):
+      for j in range(0, n):
+        g4_chi2 += (total_results[i] - total_g4.Eval(total_xs[i]))*total_xsec_cov_mat[i][j]*(total_results[j] - total_g4.Eval(total_xs[j]))
+    print(g4_chi2)
+
     c = RT.TCanvas('cTotal', '')
     total_g4.Draw('AC')
     gr_total.Draw('pez same')
     total_g4.GetXaxis().CenterTitle()
     total_g4.GetYaxis().CenterTitle()
-    total_g4.GetXaxis().SetRangeUser(0., 999.)
-    tt.DrawLatex(0.10,0.94,"#bf{DUNE:ProtoDUNE-SP}");
-    leg = RT.TLegend()
-    leg.AddEntry(total_g4, 'Geant4 10.6', 'l')
-    leg.AddEntry(gr_total, 'ProtoDUNE-SP', 'pez')
+    total_g4.GetXaxis().SetRangeUser(0., 1000.)
+    tt.DrawLatex(0.10,0.94,"#bf{DUNE:ProtoDUNE-SP}")
+
+    if len(extra_xsecs) > 0:
+      extra_total_chi2s = []
+
+      extra_xsecs_total = []
+      for ix, ex in enumerate(extra_xsecs):
+
+        #Need to sum the xsecs
+        
+        if extra_types[ix] == 'genie':
+          extra_xsecs_total.append(ex[0].Clone())
+          for i in range(1,len(ex)): extra_xsecs_total[-1].Add(ex[i])
+        else:
+          xs = ex[0].GetX()
+          ys = np.array(ex[0].GetY())
+          # print("ys", ys)
+          for i in range(1, len(ex)):
+            ys += np.array(ex[i].GetY())
+            # print("ys", np.array(ex[i].GetY()))
+          # print(ys)
+          extra_xsecs_total.append(RT.TGraph(len(xs), xs, ys))
+
+        extra_xsecs_total[-1].SetLineColor(RT.kRed)
+        extra_xsecs_total[-1].SetLineWidth(2)
+        extra_xsecs_total[-1].SetLineStyle(extra_styles[ix])
+        extra_xsecs_total[-1].SetLineColor(extra_colors[ix])
+
+        if extra_types[ix] == 'genie':
+          h = extra_xsecs_total[-1]
+          h.Draw('C hist same')
+
+          bins = [h.FindBin(x) for x in total_xs]
+          ys = [h.GetBinContent(b) for b in bins]
+          print(total_xs, bins, ys)
+          chi2 = 0.
+          n = len(total_results)
+          for i in range(0, n):
+            for j in range(0, n):
+              chi2 += (total_results[i] - ys[i])*total_xsec_cov_mat[i][j]*(total_results[j] - ys[j])
+          print(chi2)
+          extra_total_chi2s.append(chi2)
+        else:
+          g = extra_xsecs_total[-1]
+          g.Draw('C same')
+          chi2 = 0.
+          n = len(total_results)
+          for i in range(0, n):
+            for j in range(0, n):
+              chi2 += (total_results[i] - g.Eval(total_xs[i]))*total_xsec_cov_mat[i][j]*(total_results[j] - g.Eval(total_xs[j]))
+          print(chi2)
+          extra_total_chi2s.append(chi2)
+
+
+    # leg = RT.TLegend()
+    leg = RT.TLegend(.29, .16, .89, .44)
+    leg.SetFillStyle(0)
+    leg.SetLineWidth(0)
+    leg.AddEntry(gr_total, 'Data (stat.+syst.)', 'pez')
+    leg.AddEntry(total_g4, 'Geant4 v4.10.6 (#chi^{2}' + f' = {g4_chi2:.2f})', 'l')
+    if len(extra_labels) > 0:
+      print(len(extra_labels), len(extra_total_chi2s))
+      for j in range(len(extra_xsecs)):
+          ex = extra_xsecs_total[j]
+          el = extra_labels[j]
+          print(el)
+          #   + ' (\chi^{2}' + f' = {extra_chi2s[j]:.2f})'
+          leg.AddEntry(ex, el + ' (#chi^{2}' + f' = {extra_total_chi2s[j]:.2f})', 'l')
     leg.Draw()
     if args.p:
       t_prelim.DrawLatex(0.33, .5, 'Preliminary')
     c.Write()
+    c.SaveAs('total_xsec.png')
+    c.SaveAs('total_xsec.pdf')
     
     total_corr = total_cov_hist.Clone('total_corr')
     for i in range(1, total_corr.GetNbinsX()+1):
@@ -460,12 +548,15 @@ if __name__ == '__main__':
     total_corr.SetTitle(';Cross Section Bin;Cross Section Bin;')
     total_corr.GetZaxis().SetRangeUser(-1., 1.)
     total_corr.SetMarkerSize(1.5)
-    if args.t:
-      total_corr.Draw('text same')
+    # if args.t:
+    total_corr.Draw('text same')
     tt.DrawLatex(0.10,0.94,"#bf{DUNE:ProtoDUNE-SP}");
     if args.p:
       t_prelim.DrawLatex(0.33, .5, 'Preliminary')
+    c.SetRightMargin(0.12)
     c.Write()
+    c.SaveAs('total_xsec_corr.pdf')
+    c.SaveAs('total_xsec_corr.png')
 
   ##WWith LADS
   #Rowntree
@@ -522,11 +613,7 @@ if __name__ == '__main__':
 
   KEs = [450, 550, 650, 750, 850]
   lines = []
-  #for i in range(0, len(KEs)):
-  #  if i == 0: line = '%i & %.2f $\pm$ %.2f & - & - & -\\\\'%(KEs[i], result_xsecs[0].GetY()[i], result_xsecs[0].GetEYhigh()[i])
-  #  else: line = '%i & %.2f $\pm$ %.2f & %.2f $\pm$ %.2f & %.2f $\pm$ %.2f & %.2f $\pm$ %.2f\\\\'%(KEs[i], result_xsecs[0].GetY()[i], result_xsecs[0].GetEYhigh()[i], result_xsecs[1].GetY()[i-1], result_xsecs[1].GetEYhigh()[i-1], result_xsecs[2].GetY()[i-1], result_xsecs[2].GetEYhigh()[i-1], total_results[i-1], sqrt(total_errs[i-1]))
-  #  print(line)
-
+  
   print(all_xs)
   print(all_ys)
   print(all_g4s)
